@@ -5,14 +5,14 @@ from unittest import TestCase
 import numpy as np
 import pandas as pd
 
-from .LIME_ER_Wrapper import LIME_ER_Wrapper
+from LIME_ER_Wrapper import LIME_ER_Wrapper
 
 
 class TestLIME_ER_Wrapper(TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        tesi_path = '/'
-        dataset_path = os.path.join(tesi_path, 'datasets', 'Abt-Buy')
+        dataset_path = 'C:\\Users\\Barald\\UNIdrive\\TESI Baraldi Interpretable ML ER\\datasets'
+        dataset_path = os.path.join(dataset_path, 'Abt-Buy')
         cls.data = pd.read_csv(os.path.join(dataset_path, 'test.csv'))
 
         fake_pred = lambda x: np.ones((x.shape[0],)) * 0.5
@@ -147,3 +147,16 @@ class TestLIME_ER_Wrapper(TestCase):
         self.assertEqual([x[0] for x in explainer.explanations['right1'].as_list()], re.split(' ', encoded))
 
 
+    def test_explain_instance_ALL(self):
+        lstring1, lstring2, rstring1, rstring2 = 'l1 l2 l3 l4', 'm1 m2 m3 m4', 'r1 r2   r3', 's1 s2 '
+        left_string = lstring1 + ' ' + lstring2
+        right_string = rstring1 + ' ' + rstring2
+        el = pd.DataFrame([[1, 0.9, lstring1, lstring2, rstring1, rstring2]],
+                          columns=['id', 'match_score', 'left_A', 'left_B', 'right_A', 'right_B'])
+
+        explainer = LIME_ER_Wrapper(self.fake_pred, el, lprefix='left_', rprefix='right_', split_expression=r' ')
+        expl = explainer.explain_instance(el, variable_side='all', num_samples=500)
+        encoded = 'A00_l1 A01_l2 A02_l3 A03_l4 B00_m1 B01_m2 B02_m3 B03_m4 ' \
+                  'C00_r1 C01_r2 C02_r3 D00_s1 D01_s2'
+        self.assertEqual(explainer.variable_data, encoded)
+        self.assertEqual([x[0] for x in explainer.explanations['all1'].as_list()], re.split(' ', encoded))

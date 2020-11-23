@@ -12,15 +12,18 @@ class Mapper(object):
         self.arange = np.arange(100)
         self.split_expression = split_expression
 
-    def map_word_to_attr(self, text_to_restructure):
+    def map_word_to_attr_dict(self, text_to_restructure):
         res = re.findall(r'(?P<attr>[A-Z]{1})(?P<pos>[0-9]{2})_(?P<word>[^' + self.split_expression + ']+)',
                          text_to_restructure)
         structured_row = {col: '' for col in self.columns}
         for col_code, pos, word in res:
             structured_row[self.attr_map[col_code]] += word + ' '
-        for col in self.columns: # Remove last space
+        for col in self.columns:  # Remove last space
             structured_row[col] = structured_row[col][:-1]
         return structured_row
+
+    def map_word_to_attr(self, text_to_restructure):
+        return pd.DataFrame([self.map_word_to_attr_dict( text_to_restructure)])
 
     def encode_attr(self, el):
         return ' '.join(
@@ -44,6 +47,7 @@ class LIME_ER_Wrapper(object):
         self.cols = [x for x in dataset.columns if x not in exclude_attrs]
         self.left_cols = [x for x in self.cols if x.startswith(self.lprefix)]
         self.right_cols = [x for x in self.cols if x.startswith(self.rprefix)]
+        self.cols = self.left_cols + self.right_cols
         self.explanations = {}
 
     def explain(self, elements, kind='all', **argv, ):
@@ -53,19 +57,19 @@ class LIME_ER_Wrapper(object):
         left_impacts = []
         for idx in range(elements.shape[0]):
             impacts = self.explain_instance(elements.iloc[[idx]], variable_side='left', fixed_side='right', **argv)
-            impacts['side'] = 'left'
+            impacts['conf'] = 'left'
             left_impacts.append(impacts)
 
         right_impacts = []
         for idx in range(elements.shape[0]):
             impacts = self.explain_instance(elements.iloc[[idx]], variable_side='right', fixed_side='left', **argv)
-            impacts['side'] = 'right'
+            impacts['conf'] = 'right'
             right_impacts.append(impacts)
 
         total_impacts = []
         for idx in range(elements.shape[0]):
             impacts = self.explain_instance(elements.iloc[[idx]], variable_side='all', fixed_side=None, **argv)
-            impacts['side'] = 'all'
+            impacts['conf'] = 'all'
             total_impacts.append(impacts)
         self.impacts = pd.concat(left_impacts + right_impacts + total_impacts)
         return self.impacts
@@ -76,6 +80,8 @@ class LIME_ER_Wrapper(object):
         self.add_after_perturbation = add_after_perturbation
         self.overlap = overlap
         variable_el = el.copy()
+        for col in self.cols:
+            variable_el[col] = ' '.join(re.split(r' +', str(variable_el[col].values[0]).strip()))
 
         if variable_side in ['left', 'right']:
             variable_cols = self.left_cols if variable_side == 'left' else self.right_cols
@@ -91,24 +97,23 @@ class LIME_ER_Wrapper(object):
             else:
                 fixed_cols, not_fixed_cols = self.right_cols, self.left_cols
             mapper_fixed = Mapper(fixed_cols, self.split_expression)
-            self.fixed_data = pd.DataFrame([mapper_fixed.map_word_to_attr(mapper_fixed.encode_attr(
-                el[fixed_cols]))])  # encode and decode data of fixed source to ensure the same format
+            self.fixed_data = mapper_fixed.map_word_to_attr(mapper_fixed.encode_attr(
+                el[fixed_cols]))  # encode and decode data of fixed source to ensure the same format
             self.mapper_variable = Mapper(not_fixed_cols, self.split_expression)
 
         elif variable_side == 'all':
-            variable_cols = self.cols
+            variable_cols = self.left_cols + self.right_cols
             self.mapper_variable = Mapper(variable_cols, self.split_expression)
             self.fixed_data = None
             fixed_side = 'all'
-            variable_data =self.mapper_variable.encode_attr(variable_el)
+            variable_data = self.mapper_variable.encode_attr(variable_el)
         else:
             assert False, f'Not a feasible configuration. variable_side: {variable_side} not allowed.'
-
 
         words = self.splitter.split(variable_data)
         explanation = self.explainer.explain_instance(variable_data, self.predict_proba, num_features=len(words),
                                                       **argv)
-        self.variable_data = variable_data # to test the addition before perturbation
+        self.variable_data = variable_data  # to test the addition before perturbation
 
         id = el.id.values[0]  # Assume index is the id column
         self.explanations[f'{fixed_side}{id}'] = explanation
@@ -160,9 +165,9 @@ class LIME_ER_Wrapper(object):
         un elemento contenente le parole da variare per l'analisi del modello
         """
 
-        df_list = [self.mapper_variable.map_word_to_attr(perturbed_strings[0])]
+        df_list = [self.mapper_variable.map_word_to_attr_dict(perturbed_strings[0])]
         for single_row in perturbed_strings[1:]:
-            df_list.append(self.mapper_variable.map_word_to_attr(single_row))
+            df_list.append(self.mapper_variable.map_word_to_attr_dict(single_row))
         left_df = pd.DataFrame.from_dict(df_list)
 
         if self.add_after_perturbation is not None:
@@ -181,6 +186,3 @@ class LIME_ER_Wrapper(object):
         ret[:, 1] = np.array(predictions)
         ret[:, 0] = 1 - ret[:, 1]
         return ret
-
-
-
