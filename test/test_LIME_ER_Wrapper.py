@@ -92,8 +92,6 @@ class TestLIME_ER_Wrapper(TestCase):
 
     def test_explain_instance_leftRight_addBEFORERight(self):
         lstring1, lstring2, rstring1, rstring2 = 'l1 l2 l3 l1 l5', 'm1 m2 m3 m4', 'r1 r2 r3', 's1 s2'
-        left_string = lstring1 + ' ' + lstring2
-        right_string = rstring1 + ' ' + rstring2
         el = pd.DataFrame([[1, lstring1, lstring2, rstring1, rstring2]],
                           columns=['id', 'left_A', 'left_B', 'right_A', 'right_B'])
 
@@ -105,7 +103,6 @@ class TestLIME_ER_Wrapper(TestCase):
         self.assertEqual([x[0] for x in explainer.explanations['right1'].as_list()], re.split(' ', encoded))
 
         lstring1, lstring2, rstring1, rstring2 = 'l1 l2 l3 l4', 'm1 m2 m3 m4', 'r1 r2-r3 l4', 's1 s2+\'s3 m2'
-        right_string = rstring1 + ' ' + rstring2
         el = pd.DataFrame([[1, lstring1, lstring2, rstring1, rstring2]],
                           columns=['id', 'left_A', 'left_B', 'right_A', 'right_B'])
         expl = explainer.explain_instance(el, variable_side='left', fixed_side='right',
@@ -115,10 +112,8 @@ class TestLIME_ER_Wrapper(TestCase):
         self.assertEqual(explainer.variable_data, encoded)
         self.assertEqual([x[0] for x in explainer.explanations['right1'].as_list()], re.split(' ', encoded))
 
-    def test_explain_instance_leftRight_addBEFORERight_NOoverlap(self):
+    def test_explain_instance_Left_Right_addBEFORERight_NOoverlap(self):
         lstring1, lstring2, rstring1, rstring2 = 'l1 l2 l3 l1 l5', 'm1 m2 m3 m4', 'l1 r2 l3 r1', 's1 s2 m2'
-        left_string = lstring1 + ' ' + lstring2
-        right_string = rstring1 + ' ' + rstring2
         el = pd.DataFrame([[1, lstring1, lstring2, rstring1, rstring2]],
                           columns=['id', 'left_A', 'left_B', 'right_A', 'right_B'])
 
@@ -129,11 +124,21 @@ class TestLIME_ER_Wrapper(TestCase):
         self.assertEqual(explainer.variable_data, encoded)
         self.assertEqual([x[0] for x in explainer.explanations['right1'].as_list()], re.split(' ', encoded))
 
+    def test_explain_instance_Right_Right_addBEFORELeft_NOoverlap(self):
+        lstring1, lstring2, rstring1, rstring2 = 'l1 l2 l3 l1 l5', 'm1 m2 m3 m4', 'l1 r2 l3 r1', 's1 s2 m2'
+        el = pd.DataFrame([[1, lstring1, lstring2, rstring1, rstring2]],
+                          columns=['id', 'left_A', 'left_B', 'right_A', 'right_B'])
 
-    def test_explain_instance_Right_addLeftAFTER(self):
+        explainer = LIME_ER_Wrapper(self.fake_pred, el, lprefix='left_', rprefix='right_', split_expression=r' ')
+        expl = explainer.explain_instance(el, variable_side='right', fixed_side='right',
+                                          add_before_perturbation='left', overlap=False, num_samples=500)
+        encoded = 'A00_l1 A01_r2 A02_l3 A03_r1 A04_l2 A05_l5 B00_s1 B01_s2 B02_m2 B03_m1 B04_m3 B05_m4'
+        self.assertEqual(explainer.variable_data, encoded)
+        self.assertTrue(explainer.fixed_data.equals(el[[x for x in el.columns if x.startswith('right_')]]))
+        self.assertEqual([x[0] for x in explainer.explanations['right1'].as_list()], re.split(' ', encoded))
+
+    def test_explain_instance_Right_Right_addLeftAFTER(self):
         lstring1, lstring2, rstring1, rstring2 = 'l1 l2 l3 l1 l5', 'm1 m2 m3 m4', 'r1 r2 r3', 's1 s2'
-        left_string = lstring1 + ' ' + lstring2
-        right_string = rstring1 + ' ' + rstring2
         el = pd.DataFrame([[1, lstring1, lstring2, rstring1, rstring2]],
                           columns=['id', 'left_A', 'left_B', 'right_A', 'right_B'])
 
@@ -144,13 +149,12 @@ class TestLIME_ER_Wrapper(TestCase):
         self.assertTrue(explainer.tmp_dataset.left_B.str.endswith(lstring2).all())
         encoded = 'A00_r1 A01_r2 A02_r3 B00_s1 B01_s2'
         self.assertEqual(explainer.variable_data, encoded)
+        self.assertTrue(explainer.fixed_data.equals(el[[x for x in el.columns if x.startswith('right_')]]))
         self.assertEqual([x[0] for x in explainer.explanations['right1'].as_list()], re.split(' ', encoded))
 
 
     def test_explain_instance_ALL(self):
         lstring1, lstring2, rstring1, rstring2 = 'l1 l2 l3 l4', 'm1 m2 m3 m4', 'r1 r2   r3', 's1 s2 '
-        left_string = lstring1 + ' ' + lstring2
-        right_string = rstring1 + ' ' + rstring2
         el = pd.DataFrame([[1, 0.9, lstring1, lstring2, rstring1, rstring2]],
                           columns=['id', 'match_score', 'left_A', 'left_B', 'right_A', 'right_B'])
 

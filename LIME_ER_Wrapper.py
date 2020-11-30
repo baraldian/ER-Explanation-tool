@@ -76,20 +76,32 @@ class LIME_ER_Wrapper(object):
 
     def explain_instance(self, el, variable_side='left', fixed_side='right', add_before_perturbation=None,
                          add_after_perturbation=None, overlap=True, **argv):
-        # assert variable_side in ['left', 'right', 'all'], f'variable_side must be "left" or "right", found: {variable_side}'
-        self.add_after_perturbation = add_after_perturbation
-        self.overlap = overlap
         variable_el = el.copy()
         for col in self.cols:
             variable_el[col] = ' '.join(re.split(r' +', str(variable_el[col].values[0]).strip()))
 
+        variable_data = self.prepare_element(variable_el, variable_side, fixed_side, add_before_perturbation, add_after_perturbation, overlap)
+
+        words = self.splitter.split(variable_data)
+        explanation = self.explainer.explain_instance(variable_data, self.predict_proba, num_features=len(words),
+                                                      **argv)
+        self.variable_data = variable_data  # to test the addition before perturbation
+
+        id = el.id.values[0]  # Assume index is the id column
+        self.explanations[f'{self.fixed_side}{id}'] = explanation
+        return self.explanation_to_df(explanation, words, self.mapper_variable.attr_map, id)
+
+    def prepare_element(self, variable_el, variable_side, fixed_side, add_before_perturbation, add_after_perturbation, overlap):
+        """
+        Set fixed_side, fixed_data, mapper_variable.
+        Call compute_tokens if needed
+
+        """
+        self.add_after_perturbation = add_after_perturbation
+        self.overlap = overlap
+        self.fixed_side = fixed_side
         if variable_side in ['left', 'right']:
             variable_cols = self.left_cols if variable_side == 'left' else self.right_cols
-            if add_before_perturbation is not None or add_after_perturbation is not None:
-                self.compute_tokens(el)
-                if add_before_perturbation is not None:
-                    self.add_tokens(variable_el, variable_cols, add_before_perturbation, overlap)
-            variable_data = Mapper(variable_cols, self.split_expression).encode_attr(variable_el)
 
             assert fixed_side in ['left', 'right']
             if fixed_side == 'left':
@@ -98,26 +110,24 @@ class LIME_ER_Wrapper(object):
                 fixed_cols, not_fixed_cols = self.right_cols, self.left_cols
             mapper_fixed = Mapper(fixed_cols, self.split_expression)
             self.fixed_data = mapper_fixed.map_word_to_attr(mapper_fixed.encode_attr(
-                el[fixed_cols]))  # encode and decode data of fixed source to ensure the same format
+                variable_el[fixed_cols]))  # encode and decode data of fixed source to ensure the same format
             self.mapper_variable = Mapper(not_fixed_cols, self.split_expression)
+
+            if add_before_perturbation is not None or add_after_perturbation is not None:
+                self.compute_tokens(variable_el)
+                if add_before_perturbation is not None:
+                    self.add_tokens(variable_el, variable_cols, add_before_perturbation, overlap)
+            variable_data = Mapper(variable_cols, self.split_expression).encode_attr(variable_el)
 
         elif variable_side == 'all':
             variable_cols = self.left_cols + self.right_cols
             self.mapper_variable = Mapper(variable_cols, self.split_expression)
             self.fixed_data = None
-            fixed_side = 'all'
+            self.fixed_side = 'all'
             variable_data = self.mapper_variable.encode_attr(variable_el)
         else:
             assert False, f'Not a feasible configuration. variable_side: {variable_side} not allowed.'
-
-        words = self.splitter.split(variable_data)
-        explanation = self.explainer.explain_instance(variable_data, self.predict_proba, num_features=len(words),
-                                                      **argv)
-        self.variable_data = variable_data  # to test the addition before perturbation
-
-        id = el.id.values[0]  # Assume index is the id column
-        self.explanations[f'{fixed_side}{id}'] = explanation
-        return self.explanation_to_df(explanation, words, self.mapper_variable.attr_map, id)
+        return variable_data
 
     def explanation_to_df(self, explanation, words, attribute_map, id):
         impacts_list = []
@@ -164,21 +174,7 @@ class LIME_ER_Wrapper(object):
         """ Il metodo predict_proba deve prendere in input una lista di
         un elemento contenente le parole da variare per l'analisi del modello
         """
-
-        df_list = [self.mapper_variable.map_word_to_attr_dict(perturbed_strings[0])]
-        for single_row in perturbed_strings[1:]:
-            df_list.append(self.mapper_variable.map_word_to_attr_dict(single_row))
-        left_df = pd.DataFrame.from_dict(df_list)
-
-        if self.add_after_perturbation is not None:
-            self.add_tokens(left_df, left_df.columns, self.add_after_perturbation, overlap=self.overlap)
-        if self.fixed_data is not None:
-            right_df = pd.concat([self.fixed_data] * left_df.shape[0])
-            right_df.reset_index(inplace=True, drop=True)
-        else:
-            right_df = None
-
-        self.tmp_dataset = pd.concat([left_df, right_df], axis=1)
+        self.tmp_dataset = self.restructure_strings(perturbed_strings)
         self.tmp_dataset.reset_index(inplace=True, drop=True)
         predictions = self.model_predict(self.tmp_dataset)
 
@@ -186,3 +182,17 @@ class LIME_ER_Wrapper(object):
         ret[:, 1] = np.array(predictions)
         ret[:, 0] = 1 - ret[:, 1]
         return ret
+
+    def restructure_strings(self, perturbed_strings):
+        df_list = []
+        for single_row in perturbed_strings:
+            df_list.append(self.mapper_variable.map_word_to_attr_dict(single_row))
+        variable_df = pd.DataFrame.from_dict(df_list)
+        if self.add_after_perturbation is not None:
+            self.add_tokens(variable_df, variable_df.columns, self.add_after_perturbation, overlap=self.overlap)
+        if self.fixed_data is not None:
+            fixed_df = pd.concat([self.fixed_data] * variable_df.shape[0])
+            fixed_df.reset_index(inplace=True, drop=True)
+        else:
+            fixed_df = None
+        return pd.concat([variable_df, fixed_df], axis=1)
