@@ -112,3 +112,39 @@ class Evaluate_explanation(LIME_ER_Wrapper):
         ntokens = int(lent * self.percentage)
         combination['random'] = [np.random.choice(lent, ntokens) for i in range(self.num_round)]
         return combination
+
+    def generate_evaluation(self, ids, fixed: str, overlap=True):
+        evaluation_res = {}
+        if fixed == 'right':
+            fixed, f = 'right', 'R'
+            variable, v = 'left', 'L'
+        elif fixed == 'left':
+            fixed, f = 'left', 'L'
+            variable, v = 'right', 'R'
+        else:
+            assert False
+        ov = '' if overlap == True else 'NOV'
+
+        conf_name = f'{f}_{v}+{f}after{ov}'
+        res_df = self.evaluate_set(ids, conf_name, fixed_side=fixed, variable_side=variable, add_after_perturbation=fixed,
+                                 overlap=overlap)
+        evaluation_res[conf_name] = res_df
+
+        conf_name = f'{f}_{v}+{f}before{ov}'
+        res_df = self.evaluate_set(ids, conf_name, fixed_side=fixed, variable_side=variable,
+                                 add_before_perturbation=fixed, overlap=overlap)
+        evaluation_res[conf_name] = res_df
+
+        conf_name = f'{f}_{f}+{v}after{ov}'
+        res_df = self.evaluate_set(ids, conf_name, fixed_side=fixed, variable_side=fixed, add_after_perturbation=variable,
+                                 overlap=overlap)
+        evaluation_res[conf_name] = res_df
+
+        return evaluation_res
+
+    def evaluation_routine(self, ids):
+        evaluations_dict = self.generate_evaluation(ids, fixed='right', overlap=True)
+        evaluations_dict.update(self.generate_evaluation(ids, fixed='right', overlap=False))
+        evaluations_dict.update(self.generate_evaluation(ids, fixed='left', overlap=True))
+        evaluations_dict.update(self.generate_evaluation(ids, fixed='left', overlap=False))
+        return evaluations_dict

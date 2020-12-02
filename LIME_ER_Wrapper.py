@@ -23,7 +23,7 @@ class Mapper(object):
         return structured_row
 
     def map_word_to_attr(self, text_to_restructure):
-        return pd.DataFrame([self.map_word_to_attr_dict( text_to_restructure)])
+        return pd.DataFrame([self.map_word_to_attr_dict(text_to_restructure)])
 
     def encode_attr(self, el):
         return ' '.join(
@@ -80,7 +80,8 @@ class LIME_ER_Wrapper(object):
         for col in self.cols:
             variable_el[col] = ' '.join(re.split(r' +', str(variable_el[col].values[0]).strip()))
 
-        variable_data = self.prepare_element(variable_el, variable_side, fixed_side, add_before_perturbation, add_after_perturbation, overlap)
+        variable_data = self.prepare_element(variable_el, variable_side, fixed_side, add_before_perturbation,
+                                             add_after_perturbation, overlap)
 
         words = self.splitter.split(variable_data)
         explanation = self.explainer.explain_instance(variable_data, self.predict_proba, num_features=len(words),
@@ -91,7 +92,8 @@ class LIME_ER_Wrapper(object):
         self.explanations[f'{self.fixed_side}{id}'] = explanation
         return self.explanation_to_df(explanation, words, self.mapper_variable.attr_map, id)
 
-    def prepare_element(self, variable_el, variable_side, fixed_side, add_before_perturbation, add_after_perturbation, overlap):
+    def prepare_element(self, variable_el, variable_side, fixed_side, add_before_perturbation, add_after_perturbation,
+                        overlap):
         """
         Set fixed_side, fixed_data, mapper_variable.
         Call compute_tokens if needed
@@ -156,9 +158,9 @@ class LIME_ER_Wrapper(object):
 
     def add_tokens(self, el, dst_columns, src_side, overlap=True):
         if overlap == False:
-            add_tokens = self.tokens_not_overlapped
+            tokens_to_add = self.tokens_not_overlapped
         else:
-            add_tokens = self.tokens
+            tokens_to_add = self.tokens
 
         if src_side == 'left':
             src_columns = self.left_cols
@@ -168,7 +170,7 @@ class LIME_ER_Wrapper(object):
             assert False, f'src_side must "left" or "right". Got {src_side}'
 
         for col_dst, col_src in zip(dst_columns, src_columns):
-            el[col_dst] = el[col_dst] + ' ' + ' '.join(add_tokens[col_src])
+            el[col_dst] = el[col_dst].astype(str) + ' ' + ' '.join(tokens_to_add[col_src])
 
     def predict_proba(self, perturbed_strings):
         """ Il metodo predict_proba deve prendere in input una lista di
@@ -196,3 +198,43 @@ class LIME_ER_Wrapper(object):
         else:
             fixed_df = None
         return pd.concat([variable_df, fixed_df], axis=1)
+
+    def generate_explanation(self, el, explainer, fixed: str, num_sample=1000, overlap=True):
+        explanations_df = []
+        if fixed == 'right':
+            fixed, f = 'right', 'R'
+            variable, v = 'left', 'L'
+        elif fixed == 'left':
+            fixed, f = 'left', 'L'
+            variable, v = 'right', 'R'
+        else:
+            assert False
+        ov = '' if overlap == True else 'NOV'
+
+        tmp = self.explain_instance(el, fixed_side=fixed, variable_side=variable, add_after_perturbation=fixed,
+                                         num_samples=num_sample, overlap=overlap)
+        tmp['conf'] = f'{f}_{v}+{f}after{ov}'
+        explanations_df.append(tmp)
+
+        tmp = self.explain_instance(el, fixed_side=fixed, variable_side=variable, add_before_perturbation=fixed,
+                                         num_samples=num_sample, overlap=overlap)
+        tmp['conf'] = f'{f}_{v}+{f}before{ov}'
+        explanations_df.append(tmp)
+
+        tmp = self.explain_instance(el, fixed_side=fixed, variable_side=fixed, add_after_perturbation=variable,
+                                         num_samples=num_sample, overlap=overlap)
+        tmp['conf'] = f'{f}_{f}+{v}after{ov}'
+        explanations_df.append(tmp)
+        return explanations_df
+
+    def explanation_routine(self, el, explainer, num_sample=1000):
+        explanations_df = []
+        tmp = self.explain_instance(el, variable_side='all', fixed_side=None, num_samples=num_sample)
+        tmp['conf'] = 'all'
+
+        explanations_df.append(tmp)
+        explanations_df += self.generate_explanation(el, explainer, fixed='right', num_sample=num_sample, overlap=True)
+        explanations_df += self.generate_explanation(el, explainer, fixed='right', num_sample=num_sample, overlap=False)
+        explanations_df += self.generate_explanation(el, explainer, fixed='left', num_sample=num_sample, overlap=True)
+        explanations_df += self.generate_explanation(el, explainer, fixed='left', num_sample=num_sample, overlap=False)
+        return pd.concat(explanations_df)

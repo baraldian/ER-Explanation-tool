@@ -1,6 +1,7 @@
 import numpy as np
 import py_entitymatching as em
 from IPython.utils import io
+import gc
 
 class MG_predictor(object):
     def __init__(self, model, feature_table, exclude_attrs, lprefix='left_', rprefix='right_'):
@@ -15,7 +16,7 @@ class MG_predictor(object):
         
 
     def predict(self, dataset):
-
+        dataset = dataset.copy()
         with io.capture_output() as captured:
             dataset['id'] = dataset['left_id'] = dataset['right_id'] = np.arange(dataset.shape[0])
             leftDF = dataset[self.lcolumns].copy()
@@ -31,9 +32,10 @@ class MG_predictor(object):
             em.set_fk_ltable(dataset, 'left_id')
             em.set_fk_rtable(dataset, 'right_id')
 
-            exctracted_features = em.extract_feature_vecs(dataset, feature_table=self.feature_table)
-            exctracted_features = em.impute_table(exctracted_features, strategy='mean')
-            exclude_tmp = list(set(self.exclude_attrs) - (set(self.exclude_attrs) - set(exctracted_features.columns)))
-            self.predictions = self.model.predict(table=exctracted_features, exclude_attrs=exclude_tmp, return_probs=True,
+            self.exctracted_features = em.extract_feature_vecs(dataset, feature_table=self.feature_table).fillna(0)
+            exclude_tmp = list(set(self.exclude_attrs) - (set(self.exclude_attrs) - set(self.exctracted_features.columns)))
+            self.predictions = self.model.predict(table=self.exctracted_features, exclude_attrs=exclude_tmp, return_probs=True,
                                                   target_attr='pred', probs_attr='match_score', append=True)
+        del dataset
+        gc.collect()
         return self.predictions['match_score'].values
