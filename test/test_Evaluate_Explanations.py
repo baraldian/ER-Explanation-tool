@@ -14,12 +14,13 @@ class Test(TestCase):
     def setUpClass(cls) -> None:
         dataset_path = 'C:\\Users\\Barald\\UNIdrive\\TESI Baraldi Interpretable ML ER\\datasets'
         dataset_path = os.path.join(dataset_path, 'Abt-Buy')
-        test_df = pd.read_csv(os.path.join(dataset_path, 'test.csv'))
-        test_df['right_price'] = test_df['right_price$'].str.replace(',', '').astype(float)
-        test_df['left_price'] = test_df['left_price$'].str.replace(',', '').astype(float)
-        test_df.drop(columns=['left_price$', 'right_price$'], inplace=True)
+        test_df = pd.read_csv(os.path.join(dataset_path, 'test_merged.csv'))
+        test_df['right_price'] = test_df['right_price'].astype(str).str.replace(',', '').astype(float)
+        test_df['left_price'] = test_df['left_price'].astype(str).str.replace(',', '').astype(float)
+        test_df.drop(columns=['left_price', 'right_price'], inplace=True)
         cls.test_df = test_df
         cls.explanations_path = os.path.join(dataset_path, 'files', 'magellan_explanations')
+        cls.num_samples = 100
 
     def setUp(self) -> None:
         self.fake_pred = lambda x: np.ones((x.shape[0],)) * 0.5
@@ -36,11 +37,10 @@ class Test(TestCase):
 
         explainer = LIME_ER_Wrapper(self.random_pred, el, exclude_attrs=[], lprefix='left_',
                                     rprefix='right_', split_expression=r' ')
-        num_sample = 5
-        impacts_match = explainer.explain(el, num_samples=num_sample)
+        impacts_match = explainer.explain(el, num_samples=self.num_samples)
 
         ev = Evaluate_explanation(impacts_match, el, self.random_pred, el.columns,
-                                  percentage=.25, num_round=5)
+                                  percentage=.25, num_round=20)
         results = ev.evaluate_set([1], 'all', variable_side='all')
 
         encoded = 'A00_l1 A01_l2 B00_m1 B01_m2 C00_r1 D00_s1 D01_s2 D02_s3'
@@ -53,9 +53,9 @@ class Test(TestCase):
         el = pd.DataFrame([[1, lstring1, lstring2, rstring1, rstring2]],
                           columns=['id', 'left_A', 'left_B', 'right_A', 'right_B'])
 
-        explainer = LIME_ER_Wrapper(self.fake_pred, el, lprefix='left_', rprefix='right_', split_expression=r' ')
+        explainer = LIME_ER_Wrapper(self.random_pred, el, lprefix='left_', rprefix='right_', split_expression=r' ')
         impacts_match = explainer.explain_instance(el, variable_side='right', fixed_side='right',
-                                                   add_after_perturbation='left', num_samples=5)
+                                                   add_after_perturbation='left', num_samples=self.num_samples)
         conf_name = 'R_R+Lafter'
         impacts_match['conf'] = conf_name
 
@@ -74,9 +74,9 @@ class Test(TestCase):
         el = pd.DataFrame([[1, lstring1, lstring2, rstring1, rstring2]],
                           columns=['id', 'left_A', 'left_B', 'right_A', 'right_B'])
 
-        explainer = LIME_ER_Wrapper(self.fake_pred, el, lprefix='left_', rprefix='right_', split_expression=r' ')
+        explainer = LIME_ER_Wrapper(self.random_pred, el, lprefix='left_', rprefix='right_', split_expression=r' ')
         impacts_match = explainer.explain_instance(el, variable_side='right', fixed_side='right',
-                                                   add_before_perturbation='left', num_samples=5)
+                                                   add_before_perturbation='left', num_samples=self.num_samples)
         conf_name = 'R_R+Lafter'
         impacts_match['conf'] = conf_name
 
@@ -93,9 +93,9 @@ class Test(TestCase):
         el = pd.DataFrame([[1, lstring1, lstring2, rstring1, rstring2]],
                           columns=['id', 'left_A', 'left_B', 'right_A', 'right_B'])
 
-        explainer = LIME_ER_Wrapper(self.fake_pred, el, lprefix='left_', rprefix='right_', split_expression=r' ')
+        explainer = LIME_ER_Wrapper(self.random_pred, el, lprefix='left_', rprefix='right_', split_expression=r' ')
         impacts_match = explainer.explain_instance(el, variable_side='right', fixed_side='left',
-                                                   add_before_perturbation='left', num_samples=5)
+                                                   add_before_perturbation='left', num_samples=self.num_samples)
         conf_name = 'R_R+Lafter'
         impacts_match['conf'] = conf_name
 
@@ -112,8 +112,8 @@ class Test(TestCase):
         explanations_df = pd.read_csv(file_path)
         exclude_attrs = ['id', 'left_id', 'right_id', 'label']
         ev = Evaluate_explanation(explanations_df, self.test_df, self.random_pred, exclude_attrs, percentage=.25,
-                                  num_round=20)
+                                  num_round=100)
         explained_idx = [12049, 2530, 8801, 13967, 12625, 3305, 13902, 9838, 12397, 12901]
-        evaluation_dict = ev.evaluate_set([explained_idx[0]], 'L_R+LbeforeNOV', fixed_side='left', variable_side='right', add_before_perturbation='left', overlap=False)
+        evaluation_dict = ev.evaluation_routine(explained_idx, )
         assert True
 

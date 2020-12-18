@@ -1,6 +1,8 @@
+import re
+
 import numpy as np
 import pandas as pd
-import re
+
 from LIME_ER_Wrapper import LIME_ER_Wrapper
 
 
@@ -28,7 +30,6 @@ class Evaluate_explanation(LIME_ER_Wrapper):
         impacts_all = self.impacts_df[(self.impacts_df.conf == conf_name)]
         res = []
         if variable_side == 'all':
-            assert conf_name == 'all'
             impacts_all = impacts_all[impacts_all.column.str.startswith(self.lprefix)]
 
         for id in ids:
@@ -47,7 +48,7 @@ class Evaluate_explanation(LIME_ER_Wrapper):
                                              add_after_perturbation, overlap)
 
         res_df = pd.DataFrame(res)
-        res_df['conf'] =conf_name
+        res_df['conf'] = conf_name
         res_df['error'] = res_df.expected_delta - res_df.detected_delta
         return res_df
 
@@ -61,7 +62,7 @@ class Evaluate_explanation(LIME_ER_Wrapper):
 
         self.variable_encoded = self.prepare_element(start_el.copy(), variable_side, fixed_side,
                                                      add_before_perturbation, add_after_perturbation, overlap)
-        
+
         self.start_pred = self.predict_proba(self.restructure_strings([self.variable_encoded]))[0]
 
         # assert start_pred > .5
@@ -97,8 +98,8 @@ class Evaluate_explanation(LIME_ER_Wrapper):
         return res_list
 
     def get_tokens_to_remove(self, start_pred, tokens_sorted, impacts_sorted):
-        if len(tokens_sorted) >=5:
-            combination = {'firts1': [[0]], 'first2': [[0,1]], 'first5': [[0,1,2,3,4]]}
+        if len(tokens_sorted) >= 5:
+            combination = {'firts1': [[0]], 'first2': [[0, 1]], 'first5': [[0, 1, 2, 3, 4]]}
         else:
             combination = {'firts1': [[0]]}
         i = 1
@@ -125,26 +126,30 @@ class Evaluate_explanation(LIME_ER_Wrapper):
             assert False
         ov = '' if overlap == True else 'NOV'
 
-        conf_name = f'{f}_{v}+{f}after{ov}'
-        res_df = self.evaluate_set(ids, conf_name, fixed_side=fixed, variable_side=variable, add_after_perturbation=fixed,
-                                 overlap=overlap)
-        evaluation_res[conf_name] = res_df
-
         conf_name = f'{f}_{v}+{f}before{ov}'
         res_df = self.evaluate_set(ids, conf_name, fixed_side=fixed, variable_side=variable,
-                                 add_before_perturbation=fixed, overlap=overlap)
+                                   add_before_perturbation=fixed, overlap=overlap)
         evaluation_res[conf_name] = res_df
 
         conf_name = f'{f}_{f}+{v}after{ov}'
-        res_df = self.evaluate_set(ids, conf_name, fixed_side=fixed, variable_side=fixed, add_after_perturbation=variable,
-                                 overlap=overlap)
+        res_df = self.evaluate_set(ids, conf_name, fixed_side=fixed, variable_side=fixed,
+                                   add_after_perturbation=variable,
+                                   overlap=overlap)
         evaluation_res[conf_name] = res_df
 
         return evaluation_res
 
     def evaluation_routine(self, ids):
+
         evaluations_dict = self.generate_evaluation(ids, fixed='right', overlap=True)
         evaluations_dict.update(self.generate_evaluation(ids, fixed='right', overlap=False))
         evaluations_dict.update(self.generate_evaluation(ids, fixed='left', overlap=True))
         evaluations_dict.update(self.generate_evaluation(ids, fixed='left', overlap=False))
-        return evaluations_dict
+        res_df = self.evaluate_set(ids, 'all', variable_side='all')
+        evaluations_dict['all'] = res_df
+        res_df = self.evaluate_set(ids, 'mojito_copy_R', variable_side='right', fixed_side='left', add_after_perturbation='right')
+        evaluations_dict['mojito_copy_R'] = res_df
+        res_df = self.evaluate_set(ids, 'mojito_copy_L', variable_side='left', fixed_side='right', add_after_perturbation='left')
+        evaluations_dict['mojito_copy_L'] = res_df
+
+        return pd.concat(list(evaluations_dict.values()))
