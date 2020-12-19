@@ -46,8 +46,8 @@ class Mapper(object):
 
 class LIME_ER_Wrapper(object):
 
-    def __init__(self, predict_method, dataset, exclude_attrs=['id', 'label'], split_expression=r'\W+',
-                 lprefix='ltable_', rprefix='rtable_', **argv, ):
+    def __init__(self, predict_method, dataset, exclude_attrs=['id', 'label'], split_expression=' ',
+                 lprefix='left_', rprefix='right_', **argv, ):
         self.splitter = re.compile(split_expression)
         self.split_expression = split_expression
         self.explainer = LimeTextExplainer(class_names=['NO match', 'MATCH'], split_expression=split_expression, **argv)
