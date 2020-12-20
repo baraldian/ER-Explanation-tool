@@ -33,8 +33,8 @@ class Mapper(object):
     def encode_elements(self, elements):
         word_dict ={}
         res_list = []
-        for i in elements.index:
-            el = elements.loc[i]
+        for i in np.arange(elements.shape[0]):
+            el = elements.iloc[i]
             word_dict.update(id=el.id)
             for colpos, col in enumerate(self.columns):
                 word_dict.update(column=col)
