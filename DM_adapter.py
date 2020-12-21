@@ -1,9 +1,10 @@
 from __future__ import print_function
-import numpy as np
-import pandas as pd
-import deepmatcher as dm
+
 import os
+
+import deepmatcher as dm
 import nltk
+import pandas as pd
 from IPython.utils import io
 
 nltk.download('punkt')

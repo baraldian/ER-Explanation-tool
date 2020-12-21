@@ -1,8 +1,8 @@
+import os
 from unittest import TestCase
 
 import numpy as np
 import pandas as pd
-import os
 
 from Evaluate_Explanations import Evaluate_explanation
 from LIME_ER_Wrapper import LIME_ER_Wrapper
@@ -12,7 +12,7 @@ class Test(TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        dataset_path = 'C:\\Users\\Barald\\UNIdrive\\TESI Baraldi Interpretable ML ER\\datasets'
+        dataset_path = 'C:\\Users\\Barald\\UNIdrive\\EM Explanations Baraldi\\datasets'
         dataset_path = os.path.join(dataset_path, 'Abt-Buy')
         test_df = pd.read_csv(os.path.join(dataset_path, 'train_merged.csv'))
         test_df['right_price'] = test_df['right_price'].astype(str).str.replace(',', '').astype(float)

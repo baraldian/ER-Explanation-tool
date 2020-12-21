@@ -1,7 +1,9 @@
+import gc
+
 import numpy as np
 import py_entitymatching as em
 from IPython.utils import io
-import gc
+
 
 class MG_predictor(object):
     def __init__(self, model, feature_table, exclude_attrs, lprefix='left_', rprefix='right_'):
