@@ -31,7 +31,7 @@ class Mapper(object):
              wordpos, word in enumerate(re.split(self.split_expression, str(el[col].values[0])))])
 
     def encode_elements(self, elements):
-        word_dict ={}
+        word_dict = {}
         res_list = []
         for i in np.arange(elements.shape[0]):
             el = elements.iloc[i]
@@ -39,7 +39,8 @@ class Mapper(object):
             for colpos, col in enumerate(self.columns):
                 word_dict.update(column=col)
                 for wordpos, word in enumerate(re.split(self.split_expression, str(el[col]))):
-                    word_dict.update(word = word, position=wordpos, word_prefix = chr(ord('A') + colpos) + f"{wordpos:02d}_" + word)
+                    word_dict.update(word=word, position=wordpos,
+                                     word_prefix=chr(ord('A') + colpos) + f"{wordpos:02d}_" + word)
                     res_list.append(word_dict.copy())
         return pd.DataFrame(res_list)
 
@@ -63,43 +64,8 @@ class LIME_ER_Wrapper(object):
         self.cols = self.left_cols + self.right_cols
         self.explanations = {}
 
-    def explain(self, elements, conf=['left','right','all','leftCopy','rightCopy'], **argv):
-        impact_list = []
-        if 'left' in conf:
-            for idx in range(elements.shape[0]):
-                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='left', fixed_side='right', **argv)
-                impacts['conf'] = 'left'
-                impact_list.append(impacts)
-
-        if 'leftCopy' in conf:
-            for idx in range(elements.shape[0]):
-                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='left', fixed_side='right', add_before_perturbation='right',  **argv)
-                impacts['conf'] = 'leftCopy'
-                impact_list.append(impacts)
-
-        if 'right' in conf:
-            for idx in range(elements.shape[0]):
-                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='right', fixed_side='left', **argv)
-                impacts['conf'] = 'right'
-                impact_list.append(impacts)
-
-        if 'rightCopy' in conf:
-            for idx in range(elements.shape[0]):
-                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='right', fixed_side='left',
-                                                add_before_perturbation='left', **argv)
-                impacts['conf'] = 'rightCopy'
-                impact_list.append(impacts)
-
-        if 'all' in conf:
-            for idx in range(elements.shape[0]):
-                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='all', fixed_side=None, **argv)
-                impacts['conf'] = 'all'
-                impact_list.append(impacts)
-            self.impacts = pd.concat(impact_list)
-        return self.impacts
-
     def explain_instance(self, el, variable_side='left', fixed_side='right', add_before_perturbation=None,
-                         add_after_perturbation=None, overlap=True, **argv):
+                         add_after_perturbation=None, overlap=True, num_samples=500, **argv):
         variable_el = el.copy()
         for col in self.cols:
             variable_el[col] = ' '.join(re.split(r' +', str(variable_el[col].values[0]).strip()))
@@ -108,7 +74,7 @@ class LIME_ER_Wrapper(object):
                                              add_after_perturbation, overlap)
 
         words = self.splitter.split(variable_data)
-        explanation = self.explainer.explain_instance(variable_data, self.predict_proba, num_features=len(words),
+        explanation = self.explainer.explain_instance(variable_data, self.predict_proba, num_features=len(words), num_samples=num_samples,
                                                       **argv)
         self.variable_data = variable_data  # to test the addition before perturbation
 
@@ -223,6 +189,42 @@ class LIME_ER_Wrapper(object):
             fixed_df = None
         return pd.concat([variable_df, fixed_df], axis=1)
 
+    def explain(self, elements, conf=['left', 'right', 'all', 'leftCopy', 'rightCopy'], **argv):
+        impact_list = []
+        if 'left' in conf:
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='left', fixed_side='right', **argv)
+                impacts['conf'] = 'left'
+                impact_list.append(impacts)
+
+        if 'leftCopy' in conf:
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='left', fixed_side='right',
+                                                add_before_perturbation='right', **argv)
+                impacts['conf'] = 'leftCopy'
+                impact_list.append(impacts)
+
+        if 'right' in conf:
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='right', fixed_side='left', **argv)
+                impacts['conf'] = 'right'
+                impact_list.append(impacts)
+
+        if 'rightCopy' in conf:
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='right', fixed_side='left',
+                                                add_before_perturbation='left', **argv)
+                impacts['conf'] = 'rightCopy'
+                impact_list.append(impacts)
+
+        if 'all' in conf:
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='all', fixed_side=None, **argv)
+                impacts['conf'] = 'all'
+                impact_list.append(impacts)
+            self.impacts = pd.concat(impact_list)
+        return self.impacts
+
     def generate_explanation(self, el, fixed: str, num_samples=1000, overlap=True):
         explanations_df = []
         if fixed == 'right':
@@ -236,12 +238,12 @@ class LIME_ER_Wrapper(object):
         ov = '' if overlap == True else 'NOV'
 
         tmp = self.explain_instance(el, fixed_side=fixed, variable_side=variable, add_before_perturbation=fixed,
-                                         num_samples=num_samples, overlap=overlap)
+                                    num_samples=num_samples, overlap=overlap)
         tmp['conf'] = f'{f}_{v}+{f}before{ov}'
         explanations_df.append(tmp)
 
         tmp = self.explain_instance(el, fixed_side=fixed, variable_side=fixed, add_after_perturbation=variable,
-                                         num_samples=num_samples, overlap=overlap)
+                                    num_samples=num_samples, overlap=overlap)
         tmp['conf'] = f'{f}_{f}+{v}after{ov}'
         explanations_df.append(tmp)
         return explanations_df
