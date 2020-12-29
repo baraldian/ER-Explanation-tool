@@ -78,9 +78,9 @@ class Evaluate_explanation(LIME_ER_Wrapper):
 
         change_class_tokens = self.get_tokens_to_change_class(self.start_pred, self.impacts)
         combinations_to_remove = {'change_class': [change_class_tokens],
-                                  'single_words': [[x] for x in np.arange(self.impacts.shape[0])],
+                                  'single_word': [[x] for x in np.arange(self.impacts.shape[0])],
                                   'all_opposite': [[pos for pos, impact in enumerate(self.impacts) if
-                                                    impact > .5 != self.start_pred > .5]]}
+                                                    (impact > 0) == (self.start_pred > .5)]]}
 
         description_to_evaluate, comb_name_sequence, tokens_to_remove_sequence = self.generate_descriptions(combinations_to_remove)
 
@@ -162,7 +162,7 @@ class Evaluate_explanation(LIME_ER_Wrapper):
         res_df['error'] = res_df.expected_delta - res_df.detected_delta
         return res_df
 
-    def generate_evaluation(self, ids, fixed: str, overlap=True):
+    def generate_evaluation(self, ids, fixed: str, overlap=True, **argv):
         evaluation_res = {}
         if fixed == 'right':
             fixed, f = 'right', 'R'
@@ -176,29 +176,29 @@ class Evaluate_explanation(LIME_ER_Wrapper):
 
         conf_name = f'{f}_{v}+{f}before{ov}'
         res_df = self.evaluate_set(ids, conf_name, fixed_side=fixed, variable_side=variable,
-                                   add_before_perturbation=fixed, overlap=overlap)
+                                   add_before_perturbation=fixed, overlap=overlap, **argv)
         evaluation_res[conf_name] = res_df
 
         conf_name = f'{f}_{f}+{v}after{ov}'
         res_df = self.evaluate_set(ids, conf_name, fixed_side=fixed, variable_side=fixed,
                                    add_after_perturbation=variable,
-                                   overlap=overlap)
+                                   overlap=overlap, **argv)
         evaluation_res[conf_name] = res_df
 
         return evaluation_res
 
-    def evaluation_routine(self, ids):
+    def evaluation_routine(self, ids, **argv):
         assert np.all([x in self.impacts_df.id.unique() and x in self.dataset.id.unique() for x in ids]), \
             f'Missing some explanations {[x for x in ids if x in self.impacts_df.id.unique() or x in self.dataset.id.unique()]}'
-        evaluations_dict = self.generate_evaluation(ids, fixed='right', overlap=True)
-        evaluations_dict.update(self.generate_evaluation(ids, fixed='right', overlap=False))
-        evaluations_dict.update(self.generate_evaluation(ids, fixed='left', overlap=True))
-        evaluations_dict.update(self.generate_evaluation(ids, fixed='left', overlap=False))
-        res_df = self.evaluate_set(ids, 'all', variable_side='all', fixed_side=None)
+        evaluations_dict = self.generate_evaluation(ids, fixed='right', overlap=True, **argv)
+        evaluations_dict.update(self.generate_evaluation(ids, fixed='right', overlap=False, **argv))
+        evaluations_dict.update(self.generate_evaluation(ids, fixed='left', overlap=True, **argv))
+        evaluations_dict.update(self.generate_evaluation(ids, fixed='left', overlap=False, **argv))
+        res_df = self.evaluate_set(ids, 'all', variable_side='all', fixed_side=None, **argv)
         evaluations_dict['all'] = res_df
-        res_df = self.evaluate_set(ids, 'mojito_copy_R', variable_side='right', fixed_side='left')
+        res_df = self.evaluate_set(ids, 'mojito_copy_R', variable_side='right', fixed_side='left', **argv)
         evaluations_dict['mojito_copy_R'] = res_df
-        res_df = self.evaluate_set(ids, 'mojito_copy_L', variable_side='left', fixed_side='right')
+        res_df = self.evaluate_set(ids, 'mojito_copy_L', variable_side='left', fixed_side='right', **argv)
         evaluations_dict['mojito_copy_L'] = res_df
 
         return pd.concat(list(evaluations_dict.values()))

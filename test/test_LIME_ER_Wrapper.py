@@ -11,7 +11,7 @@ from LIME_ER_Wrapper import LIME_ER_Wrapper
 class TestLIME_ER_Wrapper(TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        dataset_path = 'C:\\Users\\Barald\\UNIdrive\\EM Explanations Baraldi\\datasets'
+        dataset_path = 'C:\\Users\\Barald\\UNI Gdrive\\EM Explanations Baraldi\\datasets'
         dataset_path = os.path.join(dataset_path, 'Abt-Buy')
         cls.data = pd.read_csv(os.path.join(dataset_path, 'test.csv'))
 

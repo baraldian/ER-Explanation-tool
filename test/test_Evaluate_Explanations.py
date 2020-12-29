@@ -12,7 +12,7 @@ class Test(TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        dataset_path = 'C:\\Users\\Barald\\UNIdrive\\EM Explanations Baraldi\\datasets'
+        dataset_path = 'C:\\Users\\Barald\\UNI Gdrive\\EM Explanations Baraldi\\datasets'
         dataset_path = os.path.join(dataset_path, 'Abt-Buy')
         test_df = pd.read_csv(os.path.join(dataset_path, 'train_merged.csv'))
         test_df['right_price'] = test_df['right_price'].astype(str).str.replace(',', '').astype(float)
@@ -106,6 +106,25 @@ class Test(TestCase):
         encoded = 'A00_r1 A01_r2 A02_r3 A03_l1 A04_l2 A05_l3 A06_l1 A07_l5 B00_s1 B01_s2 B02_m1 B03_m2'
         self.assertEqual(ev.variable_encoded, encoded)
         self.assertTrue(ev.fixed_data.equals(el[[x for x in el.columns if x.startswith('left_')]]))
+
+    def test_Evaluate_Right_Right_addBEFORELeft_UTILITY(self):
+        lstring1, lstring2, rstring1, rstring2 = 'l1 l2 l3 l1 l5', 'm1 m2', 'r1 r2 r3', '18.5 s2'
+        el = pd.DataFrame([[1, lstring1, lstring2, rstring1, rstring2]],
+                          columns=['id', 'left_A', 'left_B', 'right_A', 'right_B'])
+
+        explainer = LIME_ER_Wrapper(self.random_pred, el, lprefix='left_', rprefix='right_', split_expression=r' ')
+        impacts_match = explainer.explain_instance(el, variable_side='right', fixed_side='right',
+                                                   add_before_perturbation='left', num_samples=self.num_samples)
+        conf_name = 'R_R+Lafter'
+        impacts_match['conf'] = conf_name
+
+        ev = Evaluate_explanation(impacts_match, el, predict_method=self.random_pred,
+                                  percentage=.25, num_round=5)
+        results = ev.evaluate_set([1], conf_name, variable_side='right', fixed_side='right',
+                                  add_before_perturbation='left', utility=True)
+        encoded = 'A00_r1 A01_r2 A02_r3 A03_l1 A04_l2 A05_l3 A06_l1 A07_l5 B00_18.5 B01_s2 B02_m1 B03_m2'
+        self.assertEqual(ev.variable_encoded, encoded)
+        self.assertTrue(ev.fixed_data.equals(el[[x for x in el.columns if x.startswith('right_')]]))
 
     def test_Evaluation_U32(self):
         file_path = os.path.join(self.explanations_path, 'all_conf_no_match.csv')
