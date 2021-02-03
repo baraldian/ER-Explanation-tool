@@ -14,12 +14,12 @@ class Test(TestCase):
     def setUpClass(cls) -> None:
         dataset_path = 'C:\\Users\\Barald\\UNI Gdrive\\EM Explanations Baraldi\\datasets'
         dataset_path = os.path.join(dataset_path, 'Abt-Buy')
-        test_df = pd.read_csv(os.path.join(dataset_path, 'train_merged.csv'))
+        test_df = pd.read_csv(os.path.join(dataset_path, 'test_merged.csv'))
         test_df['right_price'] = test_df['right_price'].astype(str).str.replace(',', '').astype(float)
         test_df['left_price'] = test_df['left_price'].astype(str).str.replace(',', '').astype(float)
-        test_df.drop(columns=['left_price', 'right_price'], inplace=True)
+        #test_df.drop(columns=['left_price', 'right_price'], inplace=True)
         cls.test_df = test_df
-        cls.explanations_path = os.path.join(dataset_path, 'files', 'magellan_explanations')
+        cls.explanations_path = os.path.join(dataset_path, 'files', 'magellan_explanations_LOGREG')
         cls.num_samples = 100
 
     def setUp(self) -> None:
@@ -127,12 +127,12 @@ class Test(TestCase):
         self.assertTrue(ev.fixed_data.equals(el[[x for x in el.columns if x.startswith('right_')]]))
 
     def test_Evaluation_U32(self):
-        file_path = os.path.join(self.explanations_path, 'all_conf_no_match.csv')
+        file_path = os.path.join(self.explanations_path, 'explanations_of_100_NOmatch.csv')
         explanations_df = pd.read_csv(file_path)
         exclude_attrs = ['id', 'left_id', 'right_id', 'label']
         ev = Evaluate_explanation(impacts_df=explanations_df, dataset=self.test_df, predict_method=self.random_pred, exclude_attrs=exclude_attrs, percentage=.25,
                                   num_round=100)
-        explained_idx = explanations_df.id.unique()[:5]
-        evaluation_dict = ev.evaluation_routine(explained_idx, )
+        explained_idx = explanations_df.id.unique()[:2]
+        res_df = ev.evaluate_set(explained_idx, 'all', variable_side='all', fixed_side=None)
         assert True
 

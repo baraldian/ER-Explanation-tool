@@ -200,7 +200,7 @@ class LIME_ER_Wrapper(object):
         if 'leftCopy' in conf:
             for idx in range(elements.shape[0]):
                 impacts = self.explain_instance(elements.iloc[[idx]], variable_side='left', fixed_side='right',
-                                                add_before_perturbation='right', **argv)
+                                                add_before_perturbation='right', overlap=False, **argv)
                 impacts['conf'] = 'leftCopy'
                 impact_list.append(impacts)
 
@@ -213,7 +213,7 @@ class LIME_ER_Wrapper(object):
         if 'rightCopy' in conf:
             for idx in range(elements.shape[0]):
                 impacts = self.explain_instance(elements.iloc[[idx]], variable_side='right', fixed_side='left',
-                                                add_before_perturbation='left', **argv)
+                                                add_before_perturbation='left', overlap=False, **argv)
                 impacts['conf'] = 'rightCopy'
                 impact_list.append(impacts)
 
@@ -242,18 +242,26 @@ class LIME_ER_Wrapper(object):
         tmp['conf'] = f'{f}_{v}+{f}before{ov}'
         explanations_df.append(tmp)
 
+        """
         tmp = self.explain_instance(el, fixed_side=fixed, variable_side=fixed, add_after_perturbation=variable,
                                     num_samples=num_samples, overlap=overlap)
         tmp['conf'] = f'{f}_{f}+{v}after{ov}'
         explanations_df.append(tmp)
+        """
         return explanations_df
 
     def explanation_routine(self, el, num_samples=1000):
         explanations_df = []
+        tmp = self.explain_instance(el, variable_side='left', fixed_side='right', num_samples=num_samples)
+        tmp['conf'] = 'left'
+        explanations_df.append(tmp)
+        tmp = self.explain_instance(el, variable_side='right', fixed_side='left', num_samples=num_samples)
+        tmp['conf'] = 'right'
+        explanations_df.append(tmp)
         tmp = self.explain_instance(el, variable_side='all', fixed_side=None, num_samples=num_samples)
         tmp['conf'] = 'all'
-
         explanations_df.append(tmp)
+
         explanations_df += self.generate_explanation(el, fixed='right', num_samples=num_samples, overlap=True)
         explanations_df += self.generate_explanation(el, fixed='right', num_samples=num_samples, overlap=False)
         explanations_df += self.generate_explanation(el, fixed='left', num_samples=num_samples, overlap=True)
