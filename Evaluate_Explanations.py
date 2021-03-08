@@ -23,7 +23,7 @@ class Evaluate_explanation(LIME_ER_Wrapper):
         self.variable_encoded = self.prepare_element(start_el.copy(), variable_side, fixed_side,
                                                      add_before_perturbation, add_after_perturbation, overlap)
 
-        self.start_pred = self.predict_proba([self.variable_encoded])[:, 1][0]  # match_score
+        self.start_pred = self.restucture_and_predict([self.variable_encoded])[:, 1][0]  # match_score
 
     def generate_descriptions(self, combinations_to_remove):
         description_to_evaluate = []
@@ -56,7 +56,7 @@ class Evaluate_explanation(LIME_ER_Wrapper):
         description_to_evaluate, comb_name_sequence, tokens_to_remove_sequence = self.generate_descriptions(
             combinations_to_remove)
 
-        preds = self.predict_proba(description_to_evaluate)[:, 1]
+        preds = self.restucture_and_predict(description_to_evaluate)[:, 1]
         for new_pred, tokens_to_remove, comb_name in zip(preds, tokens_to_remove_sequence, comb_name_sequence):
             correct = (new_pred > .5) == ((self.start_pred - np.sum(self.impacts[tokens_to_remove])) > .5)
             evaluation.update(comb_name=comb_name, new_pred=new_pred, correct=correct,
@@ -89,7 +89,7 @@ class Evaluate_explanation(LIME_ER_Wrapper):
         description_to_evaluate, comb_name_sequence, tokens_to_remove_sequence = self.generate_descriptions(
             combinations_to_remove)
 
-        preds = self.predict_proba(description_to_evaluate)[:, 1]
+        preds = self.restucture_and_predict(description_to_evaluate)[:, 1]
         for new_pred, tokens_to_remove, comb_name in zip(preds, tokens_to_remove_sequence, comb_name_sequence):
             correct = (new_pred > .5) == ((self.start_pred - np.sum(self.impacts[tokens_to_remove])) > .5)
             evaluation.update(comb_name=comb_name, new_pred=new_pred, correct=correct,

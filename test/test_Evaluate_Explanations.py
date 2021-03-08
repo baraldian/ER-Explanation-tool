@@ -37,7 +37,7 @@ class Test(TestCase):
 
         explainer = LIME_ER_Wrapper(self.random_pred, el, exclude_attrs=[], lprefix='left_',
                                     rprefix='right_', split_expression=r' ')
-        impacts_match = explainer.explain(el, num_samples=self.num_samples)
+        impacts_match = explainer.explain_conf(el, num_samples=self.num_samples)
 
         ev = Evaluate_explanation(impacts_match, el, predict_method=self.random_pred, 
                                   percentage=.25, num_round=20)

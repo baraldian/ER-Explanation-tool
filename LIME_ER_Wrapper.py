@@ -62,7 +62,7 @@ class LIME_ER_Wrapper(object):
         self.left_cols = [x for x in self.cols if x.startswith(self.lprefix)]
         self.right_cols = [x for x in self.cols if x.startswith(self.rprefix)]
         self.cols = self.left_cols + self.right_cols
-        self.explanations = {}
+
 
     def explain_instance(self, el, variable_side='left', fixed_side='right', add_before_perturbation=None,
                          add_after_perturbation=None, overlap=True, num_samples=500, **argv):
@@ -74,21 +74,22 @@ class LIME_ER_Wrapper(object):
                                              add_after_perturbation, overlap)
 
         words = self.splitter.split(variable_data)
-        explanation = self.explainer.explain_instance(variable_data, self.predict_proba, num_features=len(words), num_samples=num_samples,
+        explanation = self.explainer.explain_instance(variable_data, self.restucture_and_predict, num_features=len(words), num_samples=num_samples,
                                                       **argv)
         self.variable_data = variable_data  # to test the addition before perturbation
 
         id = el.id.values[0]  # Assume index is the id column
-        self.explanations[f'{self.fixed_side}{id}'] = explanation
+        # self.explanations[f'{self.fixed_side}{id}'] = explanation
         return self.explanation_to_df(explanation, words, self.mapper_variable.attr_map, id)
 
     def prepare_element(self, variable_el, variable_side, fixed_side, add_before_perturbation, add_after_perturbation,
                         overlap):
         """
-        Set fixed_side, fixed_data, mapper_variable.
-        Call compute_tokens if needed
-
+        Compute the data and set config needed to perform the explanation.
+            Set fixed_side, fixed_data, mapper_variable.
+            Call compute_tokens if needed
         """
+
         self.add_after_perturbation = add_after_perturbation
         self.overlap = overlap
         self.fixed_side = fixed_side
@@ -113,6 +114,7 @@ class LIME_ER_Wrapper(object):
 
         elif variable_side == 'all':
             variable_cols = self.left_cols + self.right_cols
+
             self.mapper_variable = Mapper(variable_cols, self.split_expression)
             self.fixed_data = None
             self.fixed_side = 'all'
@@ -129,22 +131,29 @@ class LIME_ER_Wrapper(object):
             dict_impact.update(column=attribute_map[word[0]], position=int(word[1:3]), word=word[4:], word_prefix=word,
                                impact=impact)
             impacts_list.append(dict_impact.copy())
-
-        return pd.DataFrame(impacts_list)
+        return pd.DataFrame(impacts_list).reset_index()
 
     def compute_tokens(self, el):
+        """
+
+        Args:
+            el: pd.DataFrame containing the 2 description to analyze
+
+        Divide tokens of the descriptions for each column pair in inclusive and exclusive sets.
+
+        """
         tokens = {col: np.array(self.splitter.split(str(el[col].values[0]))) for col in self.cols}
         tokens_intersection = {}
         tokens_not_overlapped = {}
         for col in [col.replace('left_', '') for col in self.left_cols]:
             lcol, rcol = self.lprefix + col, self.rprefix + col
-
             tokens_intersection[col] = np.intersect1d(tokens[lcol], tokens[rcol])
             tokens_not_overlapped[lcol] = tokens[lcol][~ np.in1d(tokens[lcol], tokens_intersection[col])]
             tokens_not_overlapped[rcol] = tokens[rcol][~ np.in1d(tokens[rcol], tokens_intersection[col])]
         self.tokens_not_overlapped = tokens_not_overlapped
         self.tokens_intersection = tokens_intersection
         self.tokens = tokens
+        return dict(tokens=tokens, tokens_intersection=tokens_intersection, tokens_not_overlapped=tokens_not_overlapped)
 
     def add_tokens(self, el, dst_columns, src_side, overlap=True):
         if overlap == False:
@@ -162,9 +171,9 @@ class LIME_ER_Wrapper(object):
         for col_dst, col_src in zip(dst_columns, src_columns):
             el[col_dst] = el[col_dst].astype(str) + ' ' + ' '.join(tokens_to_add[col_src])
 
-    def predict_proba(self, perturbed_strings):
-        """ Il metodo predict_proba deve prendere in input una lista di
-        un elemento contenente le parole da variare per l'analisi del modello
+    def restucture_and_predict(self, perturbed_strings):
+        """
+            Restructure the perturbed strings from LIME and return the related predictions.
         """
         self.tmp_dataset = self.restructure_strings(perturbed_strings)
         self.tmp_dataset.reset_index(inplace=True, drop=True)
@@ -189,7 +198,46 @@ class LIME_ER_Wrapper(object):
             fixed_df = None
         return pd.concat([variable_df, fixed_df], axis=1)
 
-    def explain(self, elements, conf=['left', 'right', 'all', 'leftCopy', 'rightCopy'], **argv):
+    def explain(self, elements, conf=['LIME', 'single', 'double'], num_samples=500, **argv):
+        for i in conf:
+            assert i in ['LIME', 'single', 'double'], f'available configurations are ' + str(['LIME', 'single', 'double'])
+        impact_list = []
+        if 'single' in conf:
+            # right landmark
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='left', fixed_side='right', num_samples=num_samples, **argv)
+                impacts['conf'] = 'right_landmark'
+                impact_list.append(impacts)
+            # left landmark
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='right', fixed_side='left', num_samples=num_samples, **argv)
+                impacts['conf'] = 'left_landmark'
+                impact_list.append(impacts)
+
+        if 'double' in conf:
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='right', fixed_side='left',
+                                                add_before_perturbation='left', overlap=False, num_samples=num_samples, **argv)
+                impacts['conf'] = 'left_land_injected'
+                impact_list.append(impacts)
+
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='left', fixed_side='right',
+                                                add_before_perturbation='right', overlap=False, num_samples=num_samples, **argv)
+                impacts['conf'] = 'right_land_injected'
+                impact_list.append(impacts)
+
+        if 'LIME' in conf:
+            for idx in range(elements.shape[0]):
+                impacts = self.explain_instance(elements.iloc[[idx]], variable_side='all', fixed_side=None, num_samples=num_samples, **argv)
+                impacts['conf'] = 'LIME'
+                impact_list.append(impacts)
+        self.impacts = pd.concat(impact_list)
+        return self.impacts
+
+    # Experimental routines
+
+    def explain_conf(self, elements, conf=['left', 'right', 'all', 'leftCopy', 'rightCopy'], **argv):
         impact_list = []
         if 'left' in conf:
             for idx in range(elements.shape[0]):
