@@ -17,7 +17,7 @@ class MG_predictor(object):
         self.rcolumns = [rprefix + col for col in self.columns]
         
 
-    def predict(self, dataset):
+    def predict(self, dataset, impute_value=0):
         dataset = dataset.copy()
         with io.capture_output() as captured:
             dataset['id'] = dataset['left_id'] = dataset['right_id'] = np.arange(dataset.shape[0])
@@ -34,7 +34,8 @@ class MG_predictor(object):
             em.set_fk_ltable(dataset, 'left_id')
             em.set_fk_rtable(dataset, 'right_id')
 
-            self.exctracted_features = em.extract_feature_vecs(dataset, feature_table=self.feature_table).fillna(0)
+            self.exctracted_features = em.extract_feature_vecs(dataset, feature_table=self.feature_table)
+            self.exctracted_features = self.exctracted_features.fillna(impute_value)
             exclude_tmp = list(set(self.exclude_attrs) - (set(self.exclude_attrs) - set(self.exctracted_features.columns)))
             self.predictions = self.model.predict(table=self.exctracted_features, exclude_attrs=exclude_tmp, return_probs=True,
                                                   target_attr='pred', probs_attr='match_score', append=True)
